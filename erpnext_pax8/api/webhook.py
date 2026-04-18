@@ -1,5 +1,18 @@
+import hmac
+
 import frappe
 from frappe import _
+
+
+def _prev_month_period() -> str:
+    """Return billing period for the previous month as YYYY-MM."""
+    from datetime import timedelta
+
+    from frappe.utils import now_datetime
+
+    first_of_this_month = now_datetime().replace(day=1)
+    last_month = first_of_this_month - timedelta(days=1)
+    return last_month.strftime("%Y-%m")
 
 
 @frappe.whitelist(allow_guest=True)
@@ -12,11 +25,11 @@ def handle():
     settings = frappe.get_doc("Pax8 Settings", pax8_settings_name)
     webhook_secret = settings.get_password("webhook_secret")
 
-    if webhook_secret:
-        auth_header = frappe.request.headers.get("Authorization", "")
-        expected = f"Bearer {webhook_secret}"
-        if auth_header != expected:
-            frappe.throw(_("Invalid webhook authorization"), frappe.PermissionError)
+    if not webhook_secret:
+        frappe.throw(_("Webhook secret not configured on Pax8 Settings."), frappe.PermissionError)
+    auth_header = frappe.request.headers.get("Authorization", "")
+    if not hmac.compare_digest(auth_header, f"Bearer {webhook_secret}"):
+        frappe.throw(_("Invalid webhook authorization"), frappe.PermissionError)
 
     import json
 
@@ -42,9 +55,22 @@ def handle():
 
 def _handle_invoice_created(invoice_id: str, pax8_settings: str):
     """Trigger invoice import when Pax8 fires INVOICE.CREATED."""
-    from frappe.utils import now_datetime
+    billing_period = _prev_month_period()
 
-    billing_period = now_datetime().strftime("%Y-%m")
+    existing = frappe.db.get_value(
+        "Pax8 Import Log",
+        {
+            "pax8_settings": pax8_settings,
+            "billing_period": billing_period,
+            "status": ["in", ["running", "completed"]],
+        },
+        "name",
+    )
+    if existing:
+        frappe.logger("erpnext_pax8").info(
+            f"Pax8 webhook: import for {billing_period} already running/completed ({existing}), skipping"
+        )
+        return
 
     frappe.enqueue(
         "erpnext_pax8.api.import_invoices.import_period",

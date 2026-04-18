@@ -6,10 +6,13 @@ def run_if_due():
     """
     Daily scheduled task. Triggers invoice import if:
     - today's day-of-month matches settings.import_day_of_month
-    - no completed Import Log exists for the current billing period
+    - no running or completed Import Log exists for the billing period
     """
+    from datetime import timedelta
+
     today = now_datetime()
-    billing_period = today.strftime("%Y-%m")
+    first_of_this_month = today.replace(day=1)
+    billing_period = (first_of_this_month - timedelta(days=1)).strftime("%Y-%m")
 
     all_settings = frappe.get_all(
         "Pax8 Settings",
@@ -22,12 +25,16 @@ def run_if_due():
 
         existing = frappe.db.get_value(
             "Pax8 Import Log",
-            {"pax8_settings": s.name, "billing_period": billing_period, "status": "completed"},
+            {
+                "pax8_settings": s.name,
+                "billing_period": billing_period,
+                "status": ["in", ["running", "completed"]],
+            },
             "name",
         )
         if existing:
             frappe.logger("erpnext_pax8").debug(
-                f"Pax8 scheduler: import for {billing_period} already completed, skipping {s.name}"
+                f"Pax8 scheduler: import for {billing_period} already running/completed, skipping {s.name}"
             )
             continue
 
