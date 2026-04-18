@@ -4,14 +4,16 @@ from frappe.utils import get_last_day, getdate
 
 def _get_or_create_item(product_name: str, pax8_product_id: str, company: str) -> str:
     """Return ERPNext Item name, creating it if it doesn't exist."""
-    existing = frappe.db.get_value(
-        "Item", {"item_name": product_name}, "name"
-    )
+    existing = frappe.db.get_value("Item", {"item_name": product_name}, "name")
     if existing:
         return existing
 
-    item_group = frappe.db.get_value("Item Group", {"is_group": 0, "item_group_name": "Services"}, "name") \
+    item_group = (
+        frappe.db.get_value("Item Group", {"is_group": 0, "item_group_name": "Services"}, "name")
         or frappe.db.get_value("Item Group", {"is_group": 0}, "name")
+    )
+    if not item_group:
+        frappe.throw("No Item Group found. Please create a 'Services' Item Group in ERPNext.")
 
     item = frappe.new_doc("Item")
     item.item_name = product_name
@@ -22,11 +24,14 @@ def _get_or_create_item(product_name: str, pax8_product_id: str, company: str) -
     item.item_group = item_group
     item.is_stock_item = 0
     item.description = f"Pax8 product: {product_name}"
+
+    frappe.db.savepoint("pax8_item_insert")
     try:
         item.insert(ignore_permissions=True)
     except frappe.DuplicateEntryError:
-        frappe.db.rollback()
-        return frappe.db.get_value("Item", {"item_name": product_name}, "name")
+        frappe.db.rollback(save_point="pax8_item_insert")
+        return frappe.db.get_value("Item", {"item_name": product_name}, "name") or ""
+
     return item.name
 
 
@@ -67,13 +72,10 @@ def create_purchase_invoice(
     pi.posting_date = posting_date
     pi.set_posting_time = 1
 
-    expense_account = frappe.db.get_value(
-        "Account",
-        {"account_type": "Expense Account", "company": company, "is_group": 0},
-        "name",
-    )
+    company_doc = frappe.get_cached_doc("Company", company)
+    expense_account = company_doc.default_expense_account
     if not expense_account:
-        frappe.throw(f"No Expense Account found for company '{company}'. Check Chart of Accounts.")
+        frappe.throw(f"No Default Expense Account set for company '{company}'. Set it in Company Settings.")
 
     for line in items:
         product_name = line.get("productName") or line.get("product_name") or "Pax8 Product"
@@ -107,24 +109,18 @@ def create_sales_invoice(
     """
     if not customer:
         frappe.throw("customer is required to create a Sales Invoice.")
+    if not company:
+        frappe.throw("company is required to create a Sales Invoice.")
     if not items:
         frappe.throw("Cannot create invoice: items list is empty.")
 
     posting_date = _period_end_date(billing_period)
 
-    income_account = frappe.db.get_value(
-        "Account",
-        {"account_type": "Income Account", "company": company, "is_group": 0},
-        "name",
-    )
+    company_doc = frappe.get_cached_doc("Company", company)
+    income_account = company_doc.default_income_account
+    receivable_account = company_doc.default_receivable_account
     if not income_account:
-        frappe.throw(f"No Income Account found for company '{company}'. Check Chart of Accounts.")
-
-    receivable_account = frappe.db.get_value(
-        "Account",
-        {"account_type": "Receivable", "company": company, "is_group": 0},
-        "name",
-    )
+        frappe.throw(f"No Default Income Account set for company '{company}'. Set it in Company Settings.")
 
     si = frappe.new_doc("Sales Invoice")
     si.customer = customer
