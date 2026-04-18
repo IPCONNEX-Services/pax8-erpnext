@@ -18,26 +18,20 @@ frappe.ui.form.on("Pax8 Settings", {
 			});
 		});
 
-		frm.add_custom_button(__("Register Webhook"), () => {
-			frappe.confirm(
-				__("Register the INVOICE.CREATED webhook with Pax8? This will overwrite any existing webhook for this endpoint."),
-				() => {
-					frappe.call({
-						method: "erpnext_pax8.api.webhook.register_webhook",
-						args: { pax8_settings: frm.doc.name },
-						freeze: true,
-						freeze_message: __("Registering webhook with Pax8..."),
-						callback(r) {
-							if (r.message) {
-								frappe.msgprint(
-									__("Webhook registered. Endpoint: {0}", [r.message.endpoint_url])
-								);
-								frm.reload_doc();
-							}
-						},
-					});
-				}
-			);
+		frm.add_custom_button(__("Webhook URL"), () => {
+			const encoded = encodeURIComponent(frm.doc.name);
+			const url = `${window.location.origin}/api/method/erpnext_pax8.api.webhook.handle?settings=${encoded}`;
+			frappe.msgprint({
+				title: __("Configure Webhook in Pax8 Portal"),
+				message: `<p>Pax8 webhooks are configured in the <a href="https://developer.pax8.com" target="_blank">Pax8 Partner Portal</a>. Use these settings:</p>
+<table class="table table-bordered" style="margin-top:10px">
+<tr><td><b>URL</b></td><td><code>${url}</code></td></tr>
+<tr><td><b>Auth Type</b></td><td>Bearer Token</td></tr>
+<tr><td><b>Token</b></td><td>The Webhook Bearer Secret set on this form</td></tr>
+<tr><td><b>Topic</b></td><td>INVOICE — action: CREATED</td></tr>
+</table>`,
+				wide: true,
+			});
 		});
 
 		frm.add_custom_button(__("Import Month"), () => {
