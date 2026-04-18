@@ -1,0 +1,37 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-04-18 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "pax8_company_id",
+    "pax8_company_name",
+    "pax8_settings",
+    "column_break_1",
+    "customer",
+    "unmatched_flag",
+    "synced_at"
+  ],
+  "fields": [
+    {"fieldname": "pax8_company_id", "fieldtype": "Data", "label": "Pax8 Company ID", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "pax8_company_name", "fieldtype": "Data", "label": "Pax8 Company Name", "in_list_view": 1},
+    {"fieldname": "pax8_settings", "fieldtype": "Link", "label": "Pax8 Settings", "options": "Pax8 Settings", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "customer", "fieldtype": "Link", "label": "ERPNext Customer", "options": "Customer", "in_list_view": 1},
+    {"fieldname": "unmatched_flag", "fieldtype": "Check", "label": "Unmatched", "description": "No ERPNext customer linked — needs manual review", "in_list_view": 1},
+    {"fieldname": "synced_at", "fieldtype": "Datetime", "label": "Synced At", "read_only": 1}
+  ],
+  "links": [],
+  "modified": "2026-04-18 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Pax8 Payments",
+  "name": "Pax8 Customer",
+  "naming_rule": "By fieldname",
+  "autoname": "field:pax8_company_id",
+  "owner": "Administrator",
+  "permissions": [{"create": 1, "delete": 1, "read": 1, "write": 1, "role": "System Manager"}],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
