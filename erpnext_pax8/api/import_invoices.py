@@ -49,7 +49,14 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
                 "error_log": f"No invoices found for period {billing_period}",
             })
             frappe.db.commit()
-            return {"status": "failed", "log": log.name}
+            return {
+                "status": "failed",
+                "log": log.name,
+                "purchase_invoice": None,
+                "sales_invoices_created": 0,
+                "customers_matched": 0,
+                "customers_unmatched": 0,
+            }
 
         all_items = []
         for invoice in invoices:
@@ -103,6 +110,7 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
                 error_lines.append(
                     f"Failed SI for {pax8_customer.pax8_company_name}: {e}"
                 )
+                unmatched += 1
 
         frappe.db.set_value("Pax8 Import Log", log.name, {
             "status": "completed",
