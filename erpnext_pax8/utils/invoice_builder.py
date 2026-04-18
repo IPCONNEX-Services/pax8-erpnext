@@ -15,18 +15,28 @@ def _get_or_create_item(product_name: str, pax8_product_id: str, company: str) -
 
     item = frappe.new_doc("Item")
     item.item_name = product_name
-    item.item_code = product_name[:140]
+    if pax8_product_id:
+        item.item_code = f"{product_name[:120]}-{pax8_product_id}"[:140]
+    else:
+        item.item_code = product_name[:140]
     item.item_group = item_group
     item.is_stock_item = 0
     item.description = f"Pax8 product: {product_name}"
-    item.insert(ignore_permissions=True)
+    try:
+        item.insert(ignore_permissions=True)
+    except frappe.DuplicateEntryError:
+        frappe.db.rollback()
+        return frappe.db.get_value("Item", {"item_name": product_name}, "name")
     return item.name
 
 
 def _period_end_date(billing_period: str) -> str:
     """Return last day of YYYY-MM as a date string."""
-    year, month = billing_period.split("-")
-    return str(get_last_day(getdate(f"{year}-{month}-01")))
+    try:
+        year, month = billing_period.split("-")
+        return str(get_last_day(getdate(f"{year}-{month}-01")))
+    except (ValueError, AttributeError):
+        frappe.throw(f"Invalid billing_period '{billing_period}'. Expected YYYY-MM.")
 
 
 def create_purchase_invoice(
@@ -39,10 +49,15 @@ def create_purchase_invoice(
     items: list of Pax8 invoice item dicts with keys: productName, quantity, unitCost
     Returns the Purchase Invoice name.
     """
+    if not items:
+        frappe.throw("Cannot create invoice: items list is empty.")
+
     company = settings.company
     supplier = settings.default_supplier
     if not supplier:
         frappe.throw("Please set a Default Supplier on Pax8 Settings.")
+    if not company:
+        frappe.throw("Please set a Company on Pax8 Settings.")
 
     posting_date = _period_end_date(billing_period)
 
@@ -57,6 +72,8 @@ def create_purchase_invoice(
         {"account_type": "Expense Account", "company": company, "is_group": 0},
         "name",
     )
+    if not expense_account:
+        frappe.throw(f"No Expense Account found for company '{company}'. Check Chart of Accounts.")
 
     for line in items:
         product_name = line.get("productName") or line.get("product_name") or "Pax8 Product"
@@ -74,7 +91,6 @@ def create_purchase_invoice(
 
     pi.insert(ignore_permissions=True)
     pi.submit()
-    frappe.db.commit()
     return pi.name
 
 
@@ -89,6 +105,11 @@ def create_sales_invoice(
     items: list of Pax8 line item dicts with keys: productName, quantity, unitPrice (sell price)
     Returns the Sales Invoice name.
     """
+    if not customer:
+        frappe.throw("customer is required to create a Sales Invoice.")
+    if not items:
+        frappe.throw("Cannot create invoice: items list is empty.")
+
     posting_date = _period_end_date(billing_period)
 
     income_account = frappe.db.get_value(
@@ -96,6 +117,9 @@ def create_sales_invoice(
         {"account_type": "Income Account", "company": company, "is_group": 0},
         "name",
     )
+    if not income_account:
+        frappe.throw(f"No Income Account found for company '{company}'. Check Chart of Accounts.")
+
     receivable_account = frappe.db.get_value(
         "Account",
         {"account_type": "Receivable", "company": company, "is_group": 0},
@@ -126,5 +150,4 @@ def create_sales_invoice(
 
     si.insert(ignore_permissions=True)
     si.submit()
-    frappe.db.commit()
     return si.name
