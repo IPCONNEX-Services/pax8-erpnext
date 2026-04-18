@@ -2,7 +2,7 @@ import frappe
 import requests
 
 _PROD_BASE = "https://api.pax8.com"
-_TOKEN_PATH = "/v1/token"
+_TOKEN_URL = "https://login.pax8.com/oauth/token"
 _TOKEN_CACHE_KEY = "pax8_access_token_{settings_name}"
 _TOKEN_TTL = 82800  # 23h — slightly less than 24h expiry
 
@@ -24,7 +24,7 @@ class Pax8Client:
             return cached.decode() if isinstance(cached, bytes) else cached
 
         resp = requests.post(
-            f"{self.base_url}{_TOKEN_PATH}",
+            _TOKEN_URL,
             data={
                 "grant_type": "client_credentials",
                 "client_id": self.settings.client_id,
