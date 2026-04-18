@@ -8,6 +8,10 @@ app_version = "1.0.0"
 
 required_apps = ["frappe", "erpnext"]
 
+doctype_js = {
+    "Pax8 Settings": "public/js/pax8_settings.js",
+}
+
 scheduler_events = {
     "daily": [
         "erpnext_pax8.scheduled_tasks.monthly_import.run_if_due",
