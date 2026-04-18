@@ -107,9 +107,9 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
                 )
                 sales_count += 1
                 matched += 1
-            except Exception as e:
+            except Exception:
                 error_lines.append(
-                    f"Failed SI for {pax8_customer.pax8_company_name}: {e}"
+                    f"Failed SI for {pax8_customer.pax8_company_name}:\n{frappe.get_traceback()}"
                 )
                 unmatched += 1
 
@@ -126,7 +126,9 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
 
         if unmatched:
             frappe.msgprint(
-                msg=f"Pax8 import {billing_period}: {unmatched} unmatched customers skipped. Review Pax8 Customer list.",
+                msg=_("Pax8 import {0}: {1} unmatched customers skipped. Review Pax8 Customer list.").format(
+                    billing_period, unmatched
+                ),
                 alert=True,
                 indicator="orange",
             )
