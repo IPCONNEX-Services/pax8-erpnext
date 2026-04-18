@@ -80,7 +80,7 @@ class Pax8Client:
 
     def register_webhook(self, endpoint_url: str, bearer_secret: str) -> dict:
         resp = requests.post(
-            f"{self.base_url}/webhooks",
+            f"{self.base_url}/v1/webhooks",
             headers={**self._headers(), "Content-Type": "application/json"},
             json={
                 "name": "ERPNext Invoice Import",
