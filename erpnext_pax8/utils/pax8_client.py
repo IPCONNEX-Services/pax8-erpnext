@@ -25,13 +25,12 @@ class Pax8Client:
 
         resp = requests.post(
             _TOKEN_URL,
-            data={
+            json={
                 "grant_type": "client_credentials",
                 "client_id": self.settings.client_id,
                 "client_secret": self.settings.get_password("client_secret"),
                 "audience": "https://api.pax8.com",
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=15,
         )
         resp.raise_for_status()
