@@ -24,11 +24,11 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
         "name",
     )
     if existing_log:
-        msg = (
-            f"Import for {billing_period} already in progress or completed (log: {existing_log}). "
-            "Delete the log to re-import."
+        frappe.throw(
+            _(
+                "Import for {0} already in progress or completed (log: {1}). Delete the log to re-import."
+            ).format(billing_period, existing_log)
         )
-        frappe.throw(_(msg))
 
     settings = frappe.get_doc("Pax8 Settings", pax8_settings)
     log = frappe.new_doc("Pax8 Import Log")
@@ -65,6 +65,7 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
             all_items.extend(items)
 
         pi_name = create_purchase_invoice(all_items, billing_period, settings)
+        frappe.db.commit()
 
         by_company = defaultdict(list)
         for item in all_items:
@@ -124,12 +125,10 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
         frappe.db.commit()
 
         if unmatched:
-            frappe.publish_realtime(
-                "msgprint",
-                {
-                    "message": f"Pax8 import {billing_period}: {unmatched} unmatched customers skipped. Review Pax8 Customer list.",
-                    "alert": True,
-                },
+            frappe.msgprint(
+                msg=f"Pax8 import {billing_period}: {unmatched} unmatched customers skipped. Review Pax8 Customer list.",
+                alert=True,
+                indicator="orange",
             )
 
         return {
@@ -142,10 +141,9 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
         }
 
     except Exception:
-        import traceback
         frappe.db.set_value("Pax8 Import Log", log.name, {
             "status": "failed",
-            "error_log": traceback.format_exc(),
+            "error_log": frappe.get_traceback(),
         })
         frappe.db.commit()
         raise
