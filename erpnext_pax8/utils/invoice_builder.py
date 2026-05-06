@@ -37,6 +37,7 @@ def _purchase_tax_rows(template_name: str, total_pax8_tax: float) -> list:
             "description": f"{r.description} (per Pax8)",
             "category": getattr(r, "category", "Total") or "Total",
             "add_deduct_tax": getattr(r, "add_deduct_tax", "Add") or "Add",
+            "cost_center": PAX8_COST_CENTER,
         })
     return out
 
@@ -49,6 +50,7 @@ def _sales_tax_rows(template_name: str) -> list:
         "account_head": r.account_head,
         "rate": r.rate,
         "description": r.description,
+        "cost_center": PAX8_COST_CENTER,
     } for r in template.taxes]
 
 # Default Cost Center for every Pax8-imported PI/SI line so profitability is
