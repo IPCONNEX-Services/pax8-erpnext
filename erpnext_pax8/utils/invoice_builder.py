@@ -51,6 +51,11 @@ def _sales_tax_rows(template_name: str) -> list:
         "description": r.description,
     } for r in template.taxes]
 
+# Default Cost Center for every Pax8-imported PI/SI line so profitability is
+# trackable in P&L by Cost Center. Move to Pax8 Settings as a Link field if
+# multi-Settings (per-account) Cost Center routing is needed later.
+PAX8_COST_CENTER = "Pax8 - IPX"
+
 
 def _get_or_create_item(product_name: str, pax8_product_id: str, company: str) -> str:
     """Return ERPNext Item name, creating it if it doesn't exist."""
@@ -140,6 +145,7 @@ def create_purchase_invoice(
             "qty": qty,
             "rate": rate,
             "expense_account": expense_account,
+            "cost_center": PAX8_COST_CENTER,
         })
 
     total_pax8_tax = sum(flt(line.get("salesTax") or line.get("sales_tax") or 0) for line in items)
@@ -198,6 +204,7 @@ def create_sales_invoice(
             "qty": qty,
             "rate": rate,
             "income_account": income_account,
+            "cost_center": PAX8_COST_CENTER,
         })
 
     for tax_row in _sales_tax_rows(SALES_TAX_TEMPLATE):
