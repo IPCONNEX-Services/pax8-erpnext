@@ -69,11 +69,19 @@ class Pax8Client:
         return self._get_all("/v1/companies", {"status": "Active"})
 
     def get_invoices(self, billing_period: str = None) -> list:
-        """billing_period: YYYY-MM or None for latest."""
-        params = {}
+        """billing_period: YYYY-MM or None for latest.
+
+        Pax8 /v1/invoices ignores any `billingPeriod` query param, so filter
+        client-side on each invoice's `invoiceDate` (always 1st of the month
+        for monthly invoices).
+        """
+        invoices = self._get_all("/v1/invoices", {})
         if billing_period:
-            params["billingPeriod"] = billing_period
-        return self._get_all("/v1/invoices", params)
+            invoices = [
+                i for i in invoices
+                if (i.get("invoiceDate") or "").startswith(billing_period)
+            ]
+        return invoices
 
     def get_invoice_items(self, invoice_id: str) -> list:
         return self._get_all(f"/v1/invoices/{invoice_id}/items")

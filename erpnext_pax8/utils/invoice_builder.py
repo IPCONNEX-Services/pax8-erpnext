@@ -1,5 +1,55 @@
 import frappe
-from frappe.utils import get_last_day, getdate
+from frappe.utils import flt, get_last_day, getdate
+
+# Tax templates from canada_business_compliance app (IPCONNEX is QC).
+# Move to Pax8 Settings as Link fields if multi-province support is needed.
+PURCHASE_TAX_TEMPLATE = "CA GST + QST - IPX - IPX"
+SALES_TAX_TEMPLATE = "CA GST + QST - IPX"
+
+
+def _purchase_tax_rows(template_name: str, total_pax8_tax: float) -> list:
+    """Build PI tax rows that match Pax8's reported per-invoice salesTax exactly.
+
+    Pax8 ships a combined per-line salesTax (no GST/QST split). Split the
+    total proportionally across the template's tax rows by their declared
+    rate, preserving each row's account_head. Last row absorbs rounding so
+    the sum is exact to the cent.
+    """
+    if not total_pax8_tax:
+        return []
+    template = frappe.get_cached_doc("Purchase Taxes and Charges Template", template_name)
+    rows = list(template.taxes)
+    total_rate = sum(flt(r.rate) for r in rows)
+    if not rows or not total_rate:
+        return []
+    out = []
+    running = 0.0
+    for i, r in enumerate(rows):
+        if i < len(rows) - 1:
+            amount = round(total_pax8_tax * flt(r.rate) / total_rate, 2)
+            running += amount
+        else:
+            amount = round(total_pax8_tax - running, 2)
+        out.append({
+            "charge_type": "Actual",
+            "account_head": r.account_head,
+            "tax_amount": amount,
+            "description": f"{r.description} (per Pax8)",
+            "category": getattr(r, "category", "Total") or "Total",
+            "add_deduct_tax": getattr(r, "add_deduct_tax", "Add") or "Add",
+        })
+    return out
+
+
+def _sales_tax_rows(template_name: str) -> list:
+    """Copy template tax rows — IPCONNEX charges its own GST+QST on top of price."""
+    template = frappe.get_cached_doc("Sales Taxes and Charges Template", template_name)
+    return [{
+        "charge_type": r.charge_type,
+        "account_head": r.account_head,
+        "rate": r.rate,
+        "description": r.description,
+    } for r in template.taxes]
 
 
 def _get_or_create_item(product_name: str, pax8_product_id: str, company: str) -> str:
@@ -71,6 +121,7 @@ def create_purchase_invoice(
     pi.company = company
     pi.posting_date = posting_date
     pi.set_posting_time = 1
+    pi.taxes_and_charges = PURCHASE_TAX_TEMPLATE
 
     company_doc = frappe.get_cached_doc("Company", company)
     expense_account = company_doc.default_expense_account
@@ -80,8 +131,8 @@ def create_purchase_invoice(
     for line in items:
         product_name = line.get("productName") or line.get("product_name") or "Pax8 Product"
         pax8_product_id = line.get("productId") or line.get("product_id") or ""
-        qty = float(line.get("quantity", 1))
-        rate = float(line.get("unitCost") or line.get("unit_cost") or 0)
+        qty = flt(line.get("quantity", 1))
+        rate = flt(line.get("cost") or line.get("unitCost") or line.get("unit_cost") or 0)
 
         item_name = _get_or_create_item(product_name, pax8_product_id, company)
         pi.append("items", {
@@ -90,6 +141,10 @@ def create_purchase_invoice(
             "rate": rate,
             "expense_account": expense_account,
         })
+
+    total_pax8_tax = sum(flt(line.get("salesTax") or line.get("sales_tax") or 0) for line in items)
+    for tax_row in _purchase_tax_rows(PURCHASE_TAX_TEMPLATE, total_pax8_tax):
+        pi.append("taxes", tax_row)
 
     pi.insert(ignore_permissions=True)
     pi.submit()
@@ -127,14 +182,15 @@ def create_sales_invoice(
     si.company = company
     si.posting_date = posting_date
     si.set_posting_time = 1
+    si.taxes_and_charges = SALES_TAX_TEMPLATE
     if receivable_account:
         si.debit_to = receivable_account
 
     for line in items:
         product_name = line.get("productName") or line.get("product_name") or "Pax8 Product"
         pax8_product_id = line.get("productId") or line.get("product_id") or ""
-        qty = float(line.get("quantity", 1))
-        rate = float(line.get("unitPrice") or line.get("unit_price") or 0)
+        qty = flt(line.get("quantity", 1))
+        rate = flt(line.get("price") or line.get("unitPrice") or line.get("unit_price") or 0)
 
         item_name = _get_or_create_item(product_name, pax8_product_id, company)
         si.append("items", {
@@ -144,6 +200,8 @@ def create_sales_invoice(
             "income_account": income_account,
         })
 
+    for tax_row in _sales_tax_rows(SALES_TAX_TEMPLATE):
+        si.append("taxes", tax_row)
+
     si.insert(ignore_permissions=True)
-    si.submit()
     return si.name
