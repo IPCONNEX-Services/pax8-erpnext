@@ -64,7 +64,23 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
             items = client.get_invoice_items(invoice_id)
             all_items.extend(items)
 
-        pi_name = create_purchase_invoice(all_items, billing_period, settings)
+        # Pull invoice/due dates from the first Pax8 invoice in this period.
+        # Pax8 ships monthly invoices with invoiceDate=YYYY-MM-01 and a dueDate
+        # ~14 days later; mirror those onto the PI for accurate AP records.
+        parent = invoices[0] if invoices else {}
+        pax8_invoice_date = parent.get("invoiceDate") or None
+        pax8_due_date = parent.get("dueDate") or None
+        si_due_date = (
+            frappe.utils.add_days(pax8_invoice_date, 15) if pax8_invoice_date else None
+        )
+
+        pi_name = create_purchase_invoice(
+            all_items,
+            billing_period,
+            settings,
+            invoice_date=pax8_invoice_date,
+            due_date=pax8_due_date,
+        )
         frappe.db.commit()
 
         by_company = defaultdict(list)
@@ -104,6 +120,8 @@ def import_period(pax8_settings: str, billing_period: str, triggered_by: str = "
                     items=company_items,
                     billing_period=billing_period,
                     company=settings.company,
+                    invoice_date=pax8_invoice_date,
+                    due_date=si_due_date,
                 )
                 sales_count += 1
                 matched += 1
