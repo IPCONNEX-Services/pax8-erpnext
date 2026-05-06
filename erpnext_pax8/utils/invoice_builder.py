@@ -98,10 +98,15 @@ def create_purchase_invoice(
     items: list,
     billing_period: str,
     settings,
+    *,
+    invoice_date: str = None,
+    due_date: str = None,
 ) -> str:
     """
     Create and submit a Purchase Invoice for all Pax8 line items.
     items: list of Pax8 invoice item dicts with keys: productName, quantity, unitCost
+    invoice_date: Pax8's `invoiceDate` (preferred); falls back to last day of billing_period.
+    due_date:     Pax8's `dueDate`    (preferred); falls back to ERPNext payment-terms logic.
     Returns the Purchase Invoice name.
     """
     if not items:
@@ -114,7 +119,7 @@ def create_purchase_invoice(
     if not company:
         frappe.throw("Please set a Company on Pax8 Settings.")
 
-    posting_date = _period_end_date(billing_period)
+    posting_date = invoice_date or _period_end_date(billing_period)
 
     pi = frappe.new_doc("Purchase Invoice")
     pi.supplier = supplier
@@ -122,6 +127,8 @@ def create_purchase_invoice(
     pi.posting_date = posting_date
     pi.set_posting_time = 1
     pi.taxes_and_charges = PURCHASE_TAX_TEMPLATE
+    if due_date:
+        pi.due_date = due_date
 
     company_doc = frappe.get_cached_doc("Company", company)
     expense_account = company_doc.default_expense_account
@@ -156,10 +163,15 @@ def create_sales_invoice(
     items: list,
     billing_period: str,
     company: str,
+    *,
+    invoice_date: str = None,
+    due_date: str = None,
 ) -> str:
     """
     Create and submit a Sales Invoice for one customer's Pax8 subscriptions.
     items: list of Pax8 line item dicts with keys: productName, quantity, unitPrice (sell price)
+    invoice_date: posting_date of the SI (mirror Pax8's invoiceDate); fallback last day of billing_period.
+    due_date:     SI due_date; if not given, ERPNext's customer payment-terms logic applies.
     Returns the Sales Invoice name.
     """
     if not customer:
@@ -169,7 +181,7 @@ def create_sales_invoice(
     if not items:
         frappe.throw("Cannot create invoice: items list is empty.")
 
-    posting_date = _period_end_date(billing_period)
+    posting_date = invoice_date or _period_end_date(billing_period)
 
     company_doc = frappe.get_cached_doc("Company", company)
     income_account = company_doc.default_income_account
@@ -183,6 +195,8 @@ def create_sales_invoice(
     si.posting_date = posting_date
     si.set_posting_time = 1
     si.taxes_and_charges = SALES_TAX_TEMPLATE
+    if due_date:
+        si.due_date = due_date
     if receivable_account:
         si.debit_to = receivable_account
 
