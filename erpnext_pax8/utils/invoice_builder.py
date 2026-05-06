@@ -227,4 +227,5 @@ def create_sales_invoice(
         si.append("taxes", tax_row)
 
     si.insert(ignore_permissions=True)
+    si.submit()
     return si.name
