@@ -13,7 +13,13 @@ doctype_js = {
 }
 
 scheduler_events = {
-    "daily": [
-        "erpnext_pax8.scheduled_tasks.monthly_import.run_if_due",
-    ]
+    # Run at 01:00 in the site's local timezone (DST-stable on tz-aware hosts).
+    # Combined with run_if_due's idempotency guard, this is safe to fire daily
+    # as a backstop to the Pax8 webhook — first successful import for a given
+    # billing_period creates an Import Log; subsequent days short-circuit.
+    "cron": {
+        "0 1 * * *": [
+            "erpnext_pax8.scheduled_tasks.monthly_import.run_if_due",
+        ],
+    },
 }
