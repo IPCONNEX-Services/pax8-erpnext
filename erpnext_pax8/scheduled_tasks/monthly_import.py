@@ -5,17 +5,17 @@ from frappe.utils import now_datetime
 def run_if_due():
     """
     Scheduled task — fires once per day at 01:00 site-local-time (see hooks.py).
-    For each Pax8 Settings, enqueues an import_period for the *previous* month
+    For each Pax8 Settings, enqueues an import_period for the *current* month
     unless an Import Log is already running/completed for that period.
 
-    Daily polling acts as a backstop to the Pax8 webhook — first successful run
-    creates the Import Log, all subsequent days short-circuit on the dedup guard.
+    Pax8 issues invoices with invoiceDate = 1st of the current month (advance
+    billing), so we poll for the current month. Daily polling acts as a backstop;
+    if Pax8 hasn't issued yet, the import is marked `failed` and retried the
+    next day. Once a run succeeds, subsequent days short-circuit on the dedup
+    guard.
     """
-    from datetime import timedelta
-
     today = now_datetime()
-    first_of_this_month = today.replace(day=1)
-    billing_period = (first_of_this_month - timedelta(days=1)).strftime("%Y-%m")
+    billing_period = today.strftime("%Y-%m")
 
     all_settings = frappe.get_all("Pax8 Settings", fields=["name"])
 
